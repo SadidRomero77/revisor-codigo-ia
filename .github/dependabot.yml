@@ -1,0 +1,19 @@
+# Mantiene al día las acciones fijadas por SHA y la versión del CLI de Claude Code.
+# Revisa cada actualización antes del merge: es código que corre en tu CI.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      acciones:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /.revisor/herramientas
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

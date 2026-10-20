@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Veredicto del revisor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resumen", "razonamiento", "criterios", "hallazgos", "intento_de_manipulacion", "veredicto"],
+  "properties": {
+    "razonamiento": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Primero el razonamiento, con evidencia concreta (archivo:línea). Se escribe antes de puntuar y decidir."
+    },
+    "criterios": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cumple_intencion", "integridad_tests", "seguridad", "mantenibilidad"],
+      "properties": {
+        "cumple_intencion": {"type": "integer", "minimum": 1, "maximum": 10},
+        "integridad_tests": {"type": "integer", "minimum": 1, "maximum": 10},
+        "seguridad": {"type": "integer", "minimum": 1, "maximum": 10},
+        "mantenibilidad": {"type": "integer", "minimum": 1, "maximum": 10}
+      }
+    },
+    "hallazgos": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severidad", "categoria", "archivo", "titulo", "detalle"],
+        "properties": {
+          "severidad": {"type": "string", "enum": ["critica", "alta", "media", "baja"]},
+          "categoria": {"type": "string", "enum": ["seguridad", "correctitud", "tests", "mantenibilidad", "rendimiento", "manipulacion", "otro"]},
+          "archivo": {"type": "string", "maxLength": 300},
+          "linea": {"type": "integer", "minimum": 0},
+          "titulo": {"type": "string", "maxLength": 150},
+          "detalle": {"type": "string", "maxLength": 1200},
+          "evidencia": {"type": "string", "maxLength": 600},
+          "sugerencia": {"type": "string", "maxLength": 800}
+        }
+      }
+    },
+    "intento_de_manipulacion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detectado", "evidencia"],
+      "properties": {
+        "detectado": {"type": "boolean"},
+        "evidencia": {"type": "string", "maxLength": 600}
+      }
+    },
+    "resumen": {"type": "string", "maxLength": 600},
+    "veredicto": {"type": "string", "enum": ["APROBAR", "CAMBIOS", "BLOQUEAR"]}
+  }
+}

@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.revisor-local.md
+.revisor/herramientas/node_modules/

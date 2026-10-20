@@ -1,0 +1,34 @@
+# Prueba el propio revisor cuando cambian sus archivos: tests sin red y auditoría del workflow.
+name: Pruebas del revisor
+
+on:
+  pull_request:
+    paths: [".revisor/**", ".github/workflows/**"]
+  push:
+    branches: [main]
+    paths: [".revisor/**", ".github/workflows/**"]
+
+permissions: {}
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read  # solo leer el código
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tests del revisor (sin red, sin llave)
+        run: python3 -m unittest discover -s .revisor/tests -v
+
+      # En línea (sin --offline): así corren las auditorías que verifican que cada SHA fijado
+      # pertenece de verdad a la acción (impostor-commit) y que no tiene vulnerabilidades conocidas.
+      - name: Auditoría de seguridad de los workflows del revisor (zizmor)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pipx run --spec zizmor==1.31.1 zizmor --format=github \
+            .github/workflows/revision-ia.yml .github/workflows/pruebas-revisor.yml

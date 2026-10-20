@@ -1,0 +1,214 @@
+# Revisión de PRs con IA en tres etapas separadas (Regla de dos):
+#
+#   preparar  · lee el PR, sin IA y sin secretos        → controles deterministas + contexto
+#   revisar   · IA de solo lectura, sin permisos de escritura en GitHub → veredicto.json
+#   decidir   · sin IA y sin la llave de la IA, publica   → comentario, etiqueta y check
+#
+# Ninguna etapa reúne a la vez: contenido no confiable + un secreto + poder de cambiar el repositorio.
+# El único secreto que necesitas es ANTHROPIC_API_KEY. Instalación en docs/INSTALACION.md.
+
+name: Revisión con IA
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: revision-ia-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preparar:
+    name: Preparar (sin IA)
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read  # leer el código; esta etapa no escribe nada en GitHub
+    outputs:
+      instalado: ${{ steps.instalacion.outputs.instalado }}
+      omitir_ia: ${{ steps.preparar.outputs.omitir_ia }}
+    steps:
+      - name: Código del revisor (rama base, confiable)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: .revisor
+          persist-credentials: false
+
+      # El revisor solo confía en su propio código cuando ya está en la rama base.
+      # Por eso el PR que lo instala no se revisa a sí mismo.
+      - name: ¿El revisor ya está en la rama base?
+        id: instalacion
+        run: |
+          if [ -f base/.revisor/scripts/preparar.py ]; then
+            echo "instalado=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "instalado=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::El revisor aún no está en la rama base. Este PR no se revisa; los siguientes sí."
+          fi
+
+      - name: Código del PR (solo se lee)
+        if: steps.instalacion.outputs.instalado == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Controles deterministas
+        id: preparar
+        if: steps.instalacion.outputs.instalado == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 -I base/.revisor/scripts/preparar.py \
+            --repo pr \
+            --base-sha "$BASE_SHA" \
+            --evento "$GITHUB_EVENT_PATH" \
+            --config base/.revisor/config.json \
+            --salida contexto
+
+      - name: Guardar contexto
+        if: steps.instalacion.outputs.instalado == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: revision-ia-contexto
+          path: contexto/
+          retention-days: 3
+          if-no-files-found: error
+
+  revisar:
+    name: Revisar con IA (solo lectura)
+    needs: preparar
+    if: needs.preparar.outputs.instalado == 'true' && needs.preparar.outputs.omitir_ia == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read  # solo lectura: aunque la IA fuera engañada, no puede cambiar el repositorio
+    steps:
+      - name: Código del revisor (rama base, confiable)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: .revisor
+          persist-credentials: false
+
+      - name: Código del PR (contexto para la IA)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          persist-credentials: false
+
+      - name: Traer contexto
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: revision-ia-contexto
+          path: contexto
+
+      - name: Node 22 (sin caché, para no compartir estado entre ejecuciones)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Instalar Claude Code (versión fijada con lockfile)
+        run: |
+          cp base/.revisor/herramientas/package.json base/.revisor/herramientas/package-lock.json "$RUNNER_TEMP/"
+          npm ci --prefix "$RUNNER_TEMP" --no-audit --no-fund
+          "$RUNNER_TEMP/node_modules/.bin/claude" --version
+
+      # Opcional para endurecer: guarda el secreto en un environment con revisores obligatorios
+      # y agrega `environment: revision-ia` a este job. Ver docs/SEGURIDAD.md.
+      - name: Revisar
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 -I base/.revisor/scripts/revisar.py \
+            --revisor base/.revisor \
+            --repo pr \
+            --contexto contexto \
+            --salida veredicto \
+            --claude "$RUNNER_TEMP/node_modules/.bin/claude"
+
+      - name: Guardar veredicto
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: revision-ia-veredicto
+          path: veredicto/
+          retention-days: 3
+          if-no-files-found: error
+
+  decidir:
+    name: Decisión
+    needs: [preparar, revisar]
+    # Corre siempre: si una etapa anterior falla, este check falla en vez de quedar "omitido",
+    # porque GitHub cuenta un check omitido como aprobado.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read        # leer el código del revisor en la rama base
+      pull-requests: write  # publicar o actualizar el comentario de la revisión
+      issues: write         # poner o quitar la etiqueta de revisión humana (las etiquetas de un PR son de su issue)
+    steps:
+      - name: ¿Hay algo que decidir?
+        id: estado
+        env:
+          PREPARAR: ${{ needs.preparar.result }}
+          INSTALADO: ${{ needs.preparar.outputs.instalado }}
+          BORRADOR: ${{ github.event.pull_request.draft }}
+        run: |
+          if [ "$BORRADOR" = "true" ]; then
+            echo "::notice::PR en borrador: se revisa cuando lo marques como listo."
+            echo "decidir=false" >> "$GITHUB_OUTPUT"
+          elif [ "$PREPARAR" != "success" ]; then
+            echo "::error::La etapa de preparación terminó en '$PREPARAR'. Sin contexto no hay decisión; vuelve a ejecutar el workflow."
+            exit 1
+          elif [ "$INSTALADO" != "true" ]; then
+            echo "decidir=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "decidir=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Código del revisor (rama base, confiable)
+        if: steps.estado.outputs.decidir == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: .revisor
+          persist-credentials: false
+
+      - name: Traer contexto
+        if: steps.estado.outputs.decidir == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: revision-ia-contexto
+          path: contexto
+
+      - name: Traer veredicto (puede no existir si la IA no corrió)
+        if: steps.estado.outputs.decidir == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: revision-ia-veredicto
+          path: veredicto
+
+      - name: Decidir y publicar
+        if: steps.estado.outputs.decidir == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p veredicto
+          python3 -I base/.revisor/scripts/decidir.py \
+            --revisor base/.revisor \
+            --contexto contexto \
+            --veredicto veredicto \
+            --publicar

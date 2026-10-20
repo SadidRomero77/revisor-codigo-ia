@@ -1,0 +1,7 @@
+# Cambia @tu-usuario por tu usuario o equipo de GitHub (por ejemplo @mi-org/plataforma).
+# Con la protección de rama "Require review from Code Owners", nadie puede cambiar el CI
+# ni el revisor sin la aprobación de estas personas. Sin esto, un PR podría desactivar su propia revisión.
+/.github/   @tu-usuario
+/.revisor/  @tu-usuario
+/.claude/   @tu-usuario
+CLAUDE.md   @tu-usuario

@@ -1,0 +1,30 @@
+{
+  "_ayuda": "Explicación de cada opción en docs/CONFIGURACION.md. Las claves que empiezan con _ se ignoran.",
+  "modelo": "claude-sonnet-5-5",
+  "max_turnos": 25,
+  "presupuesto_usd": 2.0,
+  "timeout_segundos": 600,
+  "max_diff_kb": 300,
+  "rutas_alto_riesgo": [
+    "(^|/)(auth|authentication|autenticacion|login|session|sesion)(/|$|\\.)",
+    "(^|/)(payments?|pagos?|billing|facturacion|checkout)(/|$|\\.)",
+    "(^|/)(security|seguridad|crypto|permissions?|permisos)(/|$|\\.)",
+    "(^|/)(migrations?|migraciones)(/|$)",
+    "(^|/)(infra|terraform|k8s|kubernetes|helm|deploy|ansible)(/|$)",
+    "\\.tf$",
+    "(^|/)Dockerfile$",
+    "(^|/)(package\\.json|requirements[^/]*\\.txt|pyproject\\.toml|go\\.mod|Cargo\\.toml|pom\\.xml|build\\.gradle(\\.kts)?|Gemfile|composer\\.json)$"
+  ],
+  "rutas_excluidas_del_diff": [
+    "(^|/)(package-lock\\.json|yarn\\.lock|pnpm-lock\\.yaml|poetry\\.lock|Pipfile\\.lock|uv\\.lock|Cargo\\.lock|go\\.sum|composer\\.lock|Gemfile\\.lock)$",
+    "\\.min\\.(js|css)$",
+    "(^|/)(dist|vendor|node_modules)/",
+    "\\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|woff2?|ttf)$"
+  ],
+  "ia_bloquea_en": ["BLOQUEAR", "CAMBIOS"],
+  "si_falla_la_ia": "revision_humana",
+  "omitir_ia_si_ya_esta_bloqueado": true,
+  "etiqueta_revision_humana": "revision-humana-requerida",
+  "etiqueta_anulacion": "revision-ia-anulada",
+  "roles_que_anulan": ["admin", "maintain"]
+}
