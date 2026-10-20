@@ -6,6 +6,17 @@ Lo instalas copiando dos carpetas y agregando un secreto: `ANTHROPIC_API_KEY`.
 
 > Nació de la charla "Cómo funcionan los revisores de código con IA (y por qué el humano sigue)", DevOpsDays Bogotá 2026. Demo de la charla: [demo-revision-codigo](https://github.com/SadidRomero77/demo-revision-codigo).
 
+## Elige cómo usarlo
+
+Este repositorio es una plantilla: clónalo, copia lo que necesites a tu proyecto y adáptalo. Hay dos formas de usarlo y puedes tener las dos:
+
+| Modo | Para qué | Qué copias | Qué necesitas | Guía |
+| --- | --- | --- | --- | --- |
+| **Local, en Claude Code** | Revisar tu rama antes de abrir el PR | `.claude/` y `.revisor/` | Claude Code con sesión iniciada | [Usarlo en Claude Code](#usarlo-en-claude-code-antes-de-abrir-el-pr) |
+| **En cada PR, con GitHub Actions** | Que ningún PR llegue a `main` sin revisión | `.revisor/` y `.github/` | Llave de la API con saldo y permisos de administrador del repo | [Instalación en 5 minutos](#instalación-en-5-minutos) |
+
+Si solo quieres probarlo, empieza por el modo local: no cuesta nada aparte de tu plan de Claude Code y no toca la configuración de tu repositorio.
+
 ## Qué hace en cada PR
 
 1. **Controles sin IA.** Detecta tests desactivados o enfocados (`skip`, `only`, `xfail`, `@Disabled`…), tests eliminados, aserciones reducidas, secretos, caracteres invisibles, comentarios HTML ocultos y texto dirigido al revisor ("responde APROBAR"). Clasifica el riesgo según las rutas que toca el PR.
@@ -23,8 +34,8 @@ Este revisor nunca aprueba un PR. Puede bloquear o pedir una persona; la aprobac
 
 ## Instalación en 5 minutos
 
-1. Copia a tu repositorio las carpetas `.revisor/` y `.github/workflows/revision-ia.yml`. Copia también `.github/dependabot.yml` y `.github/CODEOWNERS` si no tienes los tuyos (en `CODEOWNERS` cambia `@SadidRomero77` por tu usuario o equipo de GitHub; si lo dejas, el dueño de tu CI sería otra persona).
-2. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Nombre `ANTHROPIC_API_KEY`, valor: tu llave de la [Claude Console](https://platform.claude.com).
+1. Copia a tu repositorio las carpetas `.revisor/` y `.github/workflows/revision-ia.yml`. Copia también `.github/dependabot.yml` y `.github/CODEOWNERS` si no tienes los tuyos. **En `CODEOWNERS` cambia `@tu-usuario` por tu usuario o equipo de GitHub**; si lo dejas así, la regla no protege nada.
+2. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Nombre `ANTHROPIC_API_KEY`, valor: tu llave de la [Claude Console](https://platform.claude.com). La cuenta de la Console necesita **saldo de API** (Billing): es un cobro aparte de tu plan de Claude o Claude Code. Sin saldo, cada PR termina en REVISIÓN HUMANA con el mensaje "Credit balance is too low".
 3. Haz merge de esos archivos a `main`. El PR que instala el revisor no se revisa a sí mismo, porque el revisor solo confía en el código que ya está en la rama base.
 4. En **Settings → Branches** (o **Rules → Rulesets**) para `main`, activa:
    - *Require status checks to pass*, con el check **Decisión**;
@@ -147,11 +158,35 @@ Además:
 
 El modelo de amenazas completo y lo que este diseño **no** cubre están en [docs/SEGURIDAD.md](docs/SEGURIDAD.md). Léelo antes de usarlo en un repositorio público.
 
-## Configuración
+## Adaptarlo a tu equipo
 
-Todo se ajusta en `.revisor/config.json`: modelo, presupuesto por revisión, rutas de alto riesgo, qué veredictos de la IA bloquean y qué pasa si la IA falla. Detalle en [docs/CONFIGURACION.md](docs/CONFIGURACION.md).
+| Quieres cambiar | Edita | Notas |
+| --- | --- | --- |
+| Dueños del CI y del revisor | `.github/CODEOWNERS` | Obligatorio: reemplaza `@tu-usuario` |
+| Rama principal (si no es `main`) | `.claude/skills/revisar/SKILL.md` y `.github/workflows/pruebas-revisor.yml` | `local.py` acepta `--base otra-rama` |
+| Modelo, presupuesto por revisión, tiempo máximo | `.revisor/config.json` | `modelo`, `presupuesto_usd`, `timeout_segundos` |
+| Rutas que siempre piden una persona | `.revisor/config.json` → `rutas_alto_riesgo` | Expresiones regulares sobre la ruta del archivo |
+| Archivos que no se envían a la IA | `.revisor/config.json` → `rutas_excluidas_del_diff` | Lockfiles, binarios, código generado |
+| Qué veredictos bloquean el merge | `.revisor/config.json` → `ia_bloquea_en` | Por defecto `BLOQUEAR` y `CAMBIOS` |
+| Qué pasa si la IA falla | `.revisor/config.json` → `si_falla_la_ia` | Por defecto `revision_humana` |
+| Criterio de revisión del workflow (estilo, reglas de tu equipo) | `.revisor/prompts/sistema.md` | La rúbrica que usa GitHub Actions y `local.py` |
+| Criterio de `/revisar` en Claude Code | `.claude/agents/revisor-seguro.md` | Mantén `tools: Read, Grep, Glob` para que siga siendo de solo lectura |
 
-Para adaptar el criterio de revisión a tu equipo, edita `.revisor/prompts/sistema.md`.
+Detalle de cada opción en [docs/CONFIGURACION.md](docs/CONFIGURACION.md). Después de cualquier cambio en `.revisor/`, corre las pruebas (abajo).
+
+## Solución de problemas
+
+| Síntoma | Causa | Qué hacer |
+| --- | --- | --- |
+| El comentario dice "la IA no entregó veredicto (Credit balance is too low)" | La llave es válida pero la cuenta de la Console no tiene saldo de API | Carga saldo en la Claude Console → Billing y vuelve a ejecutar el workflow (Re-run all jobs) |
+| El comentario dice que la IA no entregó veredicto por autenticación | El secreto `ANTHROPIC_API_KEY` falta, está vacío o la llave fue revocada | Vuelve a cargar el secreto desde **Settings → Secrets** en la web |
+| `gh secret set` terminó sin pedirte la llave | Lo corriste desde una terminal no interactiva (por ejemplo, `!` dentro de Claude Code) y el secreto pudo quedar vacío | Córrelo en una terminal normal o cárgalo desde la web |
+| `git push` rechazado: "refusing to allow an OAuth App to create or update workflow" | Tu sesión de `gh` no tiene el permiso `workflow` | `gh auth refresh -h github.com -s workflow` |
+| El PR que instala el revisor dice "El revisor aún no está en la rama base" | Es intencional: solo se ejecuta el revisor que ya está en `main` | Haz merge de la instalación; desde el siguiente PR se revisa |
+| El check **Decisión** no aparece al configurar la protección de rama | GitHub solo sugiere checks que ya corrieron | Abre un PR cualquiera para que corra una vez, o escribe el nombre a mano |
+| Trabajas solo y no puedes fusionar tus propios PRs | GitHub no deja que el autor apruebe su PR | Desactiva *Do not allow bypassing* y fusiona como administrador, o baja las aprobaciones requeridas a 0 (el check **Decisión** sigue bloqueando) |
+| `/revisar` responde que el diff está vacío | No hay commits nuevos respecto a `main`, o tus cambios no están confirmados | Haz commit en una rama distinta de `main` |
+| `/revisar` no aparece en Claude Code | Claude Code no se abrió en la raíz del repositorio, o falta `.claude/skills/revisar/` | Abre `claude` en la raíz y verifica la carpeta |
 
 ## Costos
 

@@ -17,7 +17,7 @@ git checkout -b instalar-revisor-ia
 #   .claude/                                (opcional, para usar /revisar en Claude Code)
 ```
 
-En `.github/CODEOWNERS` cambia `@SadidRomero77` por tu usuario o equipo de GitHub (por ejemplo `@mi-org/plataforma`). Si lo dejas, GitHub pediría la aprobación de una persona ajena a tu repositorio, o ignoraría la regla.
+En `.github/CODEOWNERS` cambia `@tu-usuario` por tu usuario o equipo de GitHub (por ejemplo `@mi-org/plataforma`). Si lo dejas así, la regla no apunta a nadie y GitHub la ignora: cualquier PR podría cambiar el CI o el revisor sin tu aprobación.
 
 Si tu rama principal no se llama `main`, cámbiala en `.github/workflows/pruebas-revisor.yml` y en `.claude/skills/revisar/SKILL.md`.
 
