@@ -23,7 +23,7 @@ Este revisor nunca aprueba un PR. Puede bloquear o pedir una persona; la aprobac
 
 ## Instalación en 5 minutos
 
-1. Copia a tu repositorio las carpetas `.revisor/` y `.github/workflows/revision-ia.yml`. Copia también `.github/dependabot.yml` y `.github/CODEOWNERS` si no tienes los tuyos (cambia `@tu-usuario`).
+1. Copia a tu repositorio las carpetas `.revisor/` y `.github/workflows/revision-ia.yml`. Copia también `.github/dependabot.yml` y `.github/CODEOWNERS` si no tienes los tuyos (en `CODEOWNERS` cambia `@SadidRomero77` por tu usuario o equipo de GitHub; si lo dejas, el dueño de tu CI sería otra persona).
 2. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Nombre `ANTHROPIC_API_KEY`, valor: tu llave de la [Claude Console](https://platform.claude.com).
 3. Haz merge de esos archivos a `main`. El PR que instala el revisor no se revisa a sí mismo, porque el revisor solo confía en el código que ya está en la rama base.
 4. En **Settings → Branches** (o **Rules → Rulesets**) para `main`, activa:
