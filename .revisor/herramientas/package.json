@@ -3,6 +3,6 @@
   "private": true,
   "description": "Versión fijada del CLI de Claude Code que usa el revisor. Actualízala con Dependabot o a mano.",
   "dependencies": {
-    "@anthropic-ai/claude-code": "2.1.304"
+    "@anthropic-ai/claude-code": "2.1.311"
   }
 }
